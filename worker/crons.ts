@@ -5,3 +5,5 @@
 export const MINUTE_CRON = '* * * * *';
 /** Housekeeping: purges expired admin sessions. */
 export const HOURLY_CRON = '0 * * * *';
+/** The outage backup, at 00:30 SAST (UTC+2), just after the local day ends. */
+export const DAILY_CRON = '30 22 * * *';

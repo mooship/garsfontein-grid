@@ -204,7 +204,7 @@ You need Node 24, a Cloudflare account and, optionally, a domain on Cloudflare.
 
 3. **Edit the place copy** in `src/i18n/*.ts` (for example `masthead`, `footer.measured`, `footer.operator` and `scope`) and the `<head>` copy in `src/i18n/head.ts`.
 4. **Review the prose** in `index.html`, `privacy.html`, `404.html` and `templates/` (`llms.txt`, `site.webmanifest`, `.well-known/security.txt`) that names the area or operator. Config values go in as `%site.<path>%` and the start date as `%since.<locale>%`; the build fails on an unknown placeholder.
-5. **Configure Cloudflare**: `cp wrangler.example.toml wrangler.toml` and follow the numbered steps at its top (Worker and database names, `npx wrangler d1 create`, Turnstile widget and hostnames, `SITE_URL`). Each rate limiter's `namespace_id` must be unique in your account. Create the queue that power alerts go through once, with `npx wrangler queues create lights-on-push`. Keep `workers_dev = true`, or uncomment `routes` for a custom domain and set `workers_dev = false` once it is live.
+5. **Configure Cloudflare**: `cp wrangler.example.toml wrangler.toml` and follow the numbered steps at its top (Worker and database names, `npx wrangler d1 create`, Turnstile widget and hostnames, `SITE_URL`). Each rate limiter's `namespace_id` must be unique in your account. Create the queue that power alerts go through once, with `npx wrangler queues create lights-on-push`, and the private bucket the daily backup goes to, with `npx wrangler r2 bucket create lights-on-backups`. Keep `workers_dev = true`, or uncomment `routes` for a custom domain and set `workers_dev = false` once it is live.
 6. **Set the secrets** (`npx wrangler login`, then `npx wrangler secret put <NAME>`):
 
    | Secret | Purpose |
@@ -223,7 +223,15 @@ You need Node 24, a Cloudflare account and, optionally, a domain on Cloudflare.
 8. **Regenerate the images**: `npm run og` (social card) and `npm run icons` (both need `npx playwright install chromium` once). Edit the `<title>` in `public/favicon.svg` by hand. The colours come from `src/styles/palette.ts`; files that cannot import it keep copies to change with it: `src/styles/privacy.css`, the theme-color metas in `index.html`, `public/favicon*.svg`, and `background_color` and `theme_color` in `templates/site.webmanifest` (JSON, so it cannot carry a note).
 9. **Review `privacy.html`** for your jurisdiction. It holds the privacy notice and terms, is written for POPIA and describes this deployment's data handling; `FORKERS` comments mark what to check. Do not use utility or municipal logos, and keep the independence disclaimer.
 
-Two crons run the Worker. Every minute it opens an outage for a silent sensor, then queues the power alerts that are due (an outage that has lasted `ALERT_DELAY_MS`, set in `worker/lib/alerts.ts`, and the follow-up to one that was alerted: its return, or its dismissal as a false positive). Every hour it removes expired sessions.
+Three crons run the Worker. Every minute it opens an outage for a silent sensor, then queues the power alerts that are due (an outage that has lasted `ALERT_DELAY_MS`, set in `worker/lib/alerts.ts`, and the follow-up to one that was alerted: its return, or its dismissal as a false positive). Every hour it removes expired sessions. Every day at 00:30 SAST (`DAILY_CRON` in `worker/crons.ts`) it backs up the outage record.
+
+### Backups
+
+The daily cron copies every outage, with every column (false positives and how each was recorded included), to `outages/<YYYY-MM-DD>.json` in the `BACKUPS` R2 bucket, named by the local date it ran (`worker/lib/backup.ts`). A second run on the same day replaces that day's file, and old files are kept. Push subscriptions and sessions are left out. Keep the bucket private: unlike the public CSV, it says how each outage was recorded. To fetch one:
+
+```sh
+npx wrangler r2 object get lights-on-backups/outages/2026-10-25.json --remote --file outages.json
+```
 
 ### Power alerts
 
@@ -252,7 +260,7 @@ The owner can get the same alerts privately, in a chat with their own Telegram b
 | `public/` | Static files copied as they are: icons and `_headers` |
 | `src/i18n/` | Public copy: one dictionary per language (`af.ts` is the source) and `head.ts` for the `<head>` |
 | `src/admin/` | The `/admin` page; its copy is English-only, in `copy.ts`, outside the dictionaries |
-| `worker/` | Worker: `index.ts` (security headers, crons), `routes/` (handlers; the route table is in `routes/index.ts`), `lib/` (router, grid, stats, auth, Turnstile), `crons.ts`, `db/schema.ts` |
+| `worker/` | Worker: `index.ts` (security headers, crons), `routes/` (handlers; the route table is in `routes/index.ts`), `lib/` (router, grid, stats, auth, Turnstile, backup), `crons.ts`, `db/schema.ts` |
 | `shared/` | Types and constants for both the app and the Worker: `api.ts` (API types, `OUTAGE_SOURCES`, `UTC_OFFSET_MS`, `localDate`), `paths.ts`, `errors.ts`, `locale.ts` (`LOCALES`, `DEFAULT_LOCALE`, `pageLocale`) |
 | `build/`, `vite.config.ts` | Build plugins: placeholders, static shell, locale pages and CSS, font preload |
 | `index.html`, `privacy.html`, `404.html`, `templates/` | Static pages (`404.html` answers any unknown path with status 404, so the build also writes `admin.html` for `/admin`), `llms.txt`, `site.webmanifest`, `.well-known/security.txt` and `sw.js` (the service worker that only shows power alerts pushed to the browser; it has no fetch handler, so it caches nothing), filled from `site.config.ts` at build time |

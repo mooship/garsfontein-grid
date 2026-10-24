@@ -1,7 +1,8 @@
 import { API_PREFIX, OUTAGE_VIEWS } from '../shared/paths';
-import { HOURLY_CRON } from './crons';
+import { DAILY_CRON, HOURLY_CRON } from './crons';
 import { createDb } from './db/client';
 import { type AlertJob, claimAlerts, enqueueAlerts, retryAlert } from './lib/alerts';
+import { backupOutages } from './lib/backup';
 import { deliverAlertPage } from './lib/deliver';
 import { detectOutage, purgeExpiredSessions } from './lib/grid';
 import { errors } from './lib/http';
@@ -49,12 +50,14 @@ export default {
     }
   },
 
-  /** The two crons in worker/crons.ts. */
+  /** The three crons in worker/crons.ts. */
   async scheduled(controller, env) {
     const db = createDb(env.DB);
     const now = new Date(controller.scheduledTime);
     if (controller.cron === HOURLY_CRON) {
       await purgeExpiredSessions(db, now);
+    } else if (controller.cron === DAILY_CRON) {
+      await backupOutages(db, env.BACKUPS, now);
     } else {
       if (await detectOutage(db, now)) await purgeEdgeCache(env.SITE_URL, OUTAGE_VIEWS);
       await enqueueAlerts(db, env.PUSH_QUEUE, await claimAlerts(db, now), now, { telegram: telegramConfigured(env) });

@@ -71,10 +71,16 @@ queue = "lights-on-push"
 max_batch_size = 1
 max_retries = 0
 
+# The daily cron's copy of the outage record (worker/lib/backup.ts); keep the bucket private.
+# Create it once: npx wrangler r2 bucket create lights-on-backups
+[[r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "lights-on-backups"
+
 [triggers]
-# Outage detection every minute; housekeeping (purging expired sessions) hourly.
-# The same as MINUTE_CRON and HOURLY_CRON in worker/crons.ts; change them together.
-crons = ["* * * * *", "0 * * * *"]
+# Outage detection every minute; housekeeping (purging expired sessions) hourly; the backup daily.
+# The same as MINUTE_CRON, HOURLY_CRON and DAILY_CRON in worker/crons.ts; change them together.
+crons = ["* * * * *", "0 * * * *", "30 22 * * *"]
 
 [observability]
 enabled = true
@@ -151,3 +157,7 @@ queue = "lights-on-push-e2e"
 queue = "lights-on-push-e2e"
 max_batch_size = 1
 max_retries = 0
+
+[[env.e2e.r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "lights-on-backups-e2e"

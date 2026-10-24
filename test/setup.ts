@@ -15,11 +15,13 @@ await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
 
 const TABLES = ['outages', 'heartbeats', 'sessions', 'push_subscriptions'];
 
-// The Cache API outlives a test, so it is emptied like the tables.
+// The Cache API and R2 outlive a test, so they are emptied like the tables.
 beforeEach(async () => {
+  const backups = (await env.BACKUPS.list()).objects.map((o) => o.key);
   await Promise.all([
     env.DB.batch(TABLES.map((t) => env.DB.prepare(`DELETE FROM ${t}`))),
     ...EDGE_CACHED.map((path) => caches.default.delete(`${env.SITE_URL}${path}`)),
+    backups.length > 0 && env.BACKUPS.delete(backups),
   ]);
 });
 
