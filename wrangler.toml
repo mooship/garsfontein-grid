@@ -80,6 +80,7 @@ bucket_name = "lights-on-backups"
 [triggers]
 # Outage detection every minute; housekeeping (purging expired sessions) hourly; the backup daily.
 # The same as MINUTE_CRON, HOURLY_CRON and DAILY_CRON in worker/crons.ts; change them together.
+# The daily hour follows site.utcOffsetMinutes (site.config.ts); test/node/crons.test.ts checks both.
 crons = ["* * * * *", "0 * * * *", "30 22 * * *"]
 
 [observability]
